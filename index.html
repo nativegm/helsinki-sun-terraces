@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Helsinki Sun Terraces</title>
+    <meta
+      name="description"
+      content="Löydä Helsingin lähimmät aurinkoiset terassit kartalta käyttäjän sijainnin, kellonajan ja aurinkoarvion perusteella."
+    />
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Helsinki terrace finder</p>
+          <h1>Missä on lähin aurinkoinen terassi juuri nyt?</h1>
+          <p class="subtitle">
+            Karttapohjainen prototyyppi, joka yhdistää terassidatan, etäisyyden ja
+            auringon suunnan. Tarkoitettu nopeaan päätökseen: minne mennä nyt tai
+            ilta-aurinkoon.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="locateBtn" class="primary">Use my location</button>
+          <button id="refreshBtn" class="secondary">Refresh data</button>
+        </div>
+      </header>
+
+      <section class="top-picks" id="topPicks">
+        <article class="pick-card">
+          <span>Best near you now</span>
+          <strong id="pickNow">Waiting for location…</strong>
+        </article>
+        <article class="pick-card">
+          <span>Best for evening sun</span>
+          <strong id="pickEvening">Loading…</strong>
+        </article>
+        <article class="pick-card">
+          <span>Best within 1 km</span>
+          <strong id="pick1km">Loading…</strong>
+        </article>
+      </section>
+
+      <section class="controls">
+        <div class="control-grid">
+          <label>
+            Search
+            <input id="searchInput" type="search" placeholder="Etsi nimellä tai alueella" />
+          </label>
+
+          <label>
+            Date
+            <input id="dateInput" type="date" />
+          </label>
+
+          <label>
+            Time
+            <input id="timeInput" type="time" step="900" />
+          </label>
+
+          <label>
+            Sort by
+            <select id="sortSelect">
+              <option value="combined">Nearest + sunny now combined</option>
+              <option value="nearest">Nearest</option>
+              <option value="sunnyNow">Sunniest now</option>
+              <option value="afternoon">Best afternoon sun</option>
+              <option value="evening">Best evening sun</option>
+              <option value="overall">Best overall score</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="filter-row">
+          <fieldset>
+            <legend>Category</legend>
+            <label><input type="checkbox" class="categoryFilter" value="bar" checked /> Bar</label>
+            <label><input type="checkbox" class="categoryFilter" value="restaurant" checked /> Restaurant</label>
+            <label><input type="checkbox" class="categoryFilter" value="cafe" checked /> Café</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Terrace type</legend>
+            <label><input type="checkbox" class="typeFilter" value="rooftop" checked /> Rooftop</label>
+            <label><input type="checkbox" class="typeFilter" value="waterfront" checked /> Waterfront</label>
+            <label><input type="checkbox" class="typeFilter" value="courtyard" checked /> Courtyard</label>
+            <label><input type="checkbox" class="typeFilter" value="street" checked /> Street terrace</label>
+            <label><input type="checkbox" class="typeFilter" value="mixed" checked /> Mixed</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Quick filters</legend>
+            <label><input id="sunnyNowOnly" type="checkbox" /> Sunny now</label>
+            <label><input id="eveningOnly" type="checkbox" /> Evening sun</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Distance</legend>
+            <label><input type="radio" name="distance" value="500" /> Within 500m</label>
+            <label><input type="radio" name="distance" value="1000" /> Within 1km</label>
+            <label><input type="radio" name="distance" value="2000" checked /> Within 2km</label>
+            <label><input type="radio" name="distance" value="5000" /> Within 5km</label>
+            <label><input type="radio" name="distance" value="all" /> All</label>
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <div class="map-panel card">
+          <div class="panel-header">
+            <h2>Map</h2>
+            <span id="statusText">Loading terrace data…</span>
+          </div>
+          <div id="map"></div>
+        </div>
+
+        <aside class="list-panel card">
+          <div class="panel-header sticky">
+            <h2>Terraces</h2>
+            <span id="resultCount">0 results</span>
+          </div>
+          <div id="resultsList" class="results-list"></div>
+        </aside>
+      </section>
+
+      <section class="card methodology">
+        <h2>How the scoring works</h2>
+        <ul>
+          <li><strong>Sun score now:</strong> based on terrace orientation vs. current selected sun azimuth.</li>
+          <li><strong>Evening / afternoon score:</strong> precomputed checks at 18:00 and 15:00.</li>
+          <li><strong>Distance score:</strong> shorter distance boosts ranking when user location is available.</li>
+          <li><strong>Confidence:</strong> terrace existence + orientation certainty from source tags and heuristics.</li>
+          <li><strong>Terrace type bonus:</strong> rooftop and waterfront get a small visibility bonus.</li>
+        </ul>
+        <p id="dataSourceNote"></p>
+      </section>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
