@@ -15,32 +15,44 @@
   <body>
     <div class="app-shell">
       <header class="hero">
-        <div>
-          <p class="eyebrow">Helsinki terrace finder</p>
-          <h1>Missä on lähin aurinkoinen terassi juuri nyt?</h1>
+        <div class="hero-copy">
+          <p class="eyebrow">Helsinki summer utility</p>
+          <h1>Find the sunniest terrace in Helsinki right now</h1>
           <p class="subtitle">
-            Karttapohjainen prototyyppi, joka yhdistää terassidatan, etäisyyden ja
-            auringon suunnan. Tarkoitettu nopeaan päätökseen: minne mennä nyt tai
-            ilta-aurinkoon.
+            No more random terrace picks. This shows where the sun is most likely hitting now,
+            after work, or later in the evening — based on location, time, and terrace exposure.
           </p>
+          <div class="hero-highlights" aria-label="Key benefits">
+            <span class="hero-pill">☀️ Best right now</span>
+            <span class="hero-pill">🌇 After-work sun</span>
+            <span class="hero-pill">📍 Near you</span>
+            <span class="hero-pill">🗺️ Map + ranked list</span>
+          </div>
+          <div class="quick-modes" aria-label="Quick modes">
+            <button id="modeNowBtn" class="mode-chip active" type="button">Now</button>
+            <button id="modeAfterWorkBtn" class="mode-chip" type="button">After work</button>
+            <button id="modeEveningBtn" class="mode-chip" type="button">Evening sun</button>
+            <button id="modeRooftopBtn" class="mode-chip" type="button">Rooftops</button>
+          </div>
         </div>
         <div class="hero-actions">
           <button id="locateBtn" class="primary">Use my location</button>
+          <button id="shareBtn" class="secondary">Share this view</button>
           <button id="refreshBtn" class="secondary">Refresh data</button>
         </div>
       </header>
 
       <section class="top-picks" id="topPicks">
-        <article class="pick-card">
-          <span>Best near you now</span>
-          <strong id="pickNow">Waiting for location…</strong>
+        <article class="pick-card featured-pick">
+          <span>☀️ Best right now</span>
+          <strong id="pickNow">Loading…</strong>
         </article>
         <article class="pick-card">
-          <span>Best for evening sun</span>
+          <span>🌇 Best for evening sun</span>
           <strong id="pickEvening">Loading…</strong>
         </article>
         <article class="pick-card">
-          <span>Best within 1 km</span>
+          <span>🚶 Best within 1 km</span>
           <strong id="pick1km">Loading…</strong>
         </article>
       </section>
@@ -128,13 +140,13 @@
       </section>
 
       <section class="card methodology">
-        <h2>How the scoring works</h2>
+        <h2>How it works</h2>
         <ul>
-          <li><strong>Sun score now:</strong> based on terrace orientation vs. current selected sun azimuth.</li>
-          <li><strong>Evening / afternoon score:</strong> precomputed checks at 18:00 and 15:00.</li>
-          <li><strong>Distance score:</strong> shorter distance boosts ranking when user location is available.</li>
-          <li><strong>Confidence:</strong> terrace existence + orientation certainty from source tags and heuristics.</li>
-          <li><strong>Terrace type bonus:</strong> rooftop and waterfront get a small visibility bonus.</li>
+          <li><strong>Sun right now:</strong> estimates which terraces face the current sun direction.</li>
+          <li><strong>After work and evening:</strong> also checks likely sun around 15:00 and 18:00.</li>
+          <li><strong>Near you matters:</strong> shorter distance gets a ranking boost when location is available.</li>
+          <li><strong>Quality weighting:</strong> curated places and higher-confidence terrace data rank better.</li>
+          <li><strong>Terrace type bonus:</strong> rooftops and waterfront spots get a small visibility boost.</li>
         </ul>
         <p id="dataSourceNote"></p>
       </section>

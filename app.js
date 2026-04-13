@@ -47,6 +47,11 @@ const els = {
   sunnyNowOnly: document.getElementById('sunnyNowOnly'),
   eveningOnly: document.getElementById('eveningOnly'),
   dataSourceNote: document.getElementById('dataSourceNote'),
+  shareBtn: document.getElementById('shareBtn'),
+  modeNowBtn: document.getElementById('modeNowBtn'),
+  modeAfterWorkBtn: document.getElementById('modeAfterWorkBtn'),
+  modeEveningBtn: document.getElementById('modeEveningBtn'),
+  modeRooftopBtn: document.getElementById('modeRooftopBtn'),
 };
 
 function initMap() {
@@ -60,8 +65,10 @@ function initMap() {
 function setDefaultInputs() {
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  const rounded = new Date(now);
+  rounded.setMinutes(Math.round(now.getMinutes() / 15) * 15, 0, 0);
   els.dateInput.value = localDate.toISOString().slice(0, 10);
-  els.timeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(Math.round(now.getMinutes() / 15) * 15 % 60).padStart(2, '0')}`;
+  els.timeInput.value = rounded.toTimeString().slice(0, 5);
 }
 
 function getSelectedDateTime() {
@@ -178,7 +185,7 @@ async function loadLiveOverpassData() {
         lon,
         category,
         terraceType,
-        description: tags.description || tags.outdoor_seating === 'yes' ? 'Outdoor seating / terrace likely available.' : 'Venue discovered from OpenStreetMap.',
+        description: tags.description || (tags.outdoor_seating === 'yes' ? 'Outdoor seating / terrace likely available.' : 'Venue discovered from OpenStreetMap.'),
         source: 'openstreetmap',
         terraceConfidence: tags.outdoor_seating === 'yes' ? 0.82 : 0.58,
         directionPrimary: inferDirectionFromText(text),
@@ -265,6 +272,88 @@ function getDistanceFilter() {
   return active?.value || 'all';
 }
 
+function getCurrentUiState() {
+  return {
+    q: els.searchInput.value.trim(),
+    date: els.dateInput.value,
+    time: els.timeInput.value,
+    sort: els.sortSelect.value,
+    sunny: els.sunnyNowOnly.checked ? '1' : '',
+    evening: els.eveningOnly.checked ? '1' : '',
+    distance: getDistanceFilter(),
+    categories: getActiveCheckboxValues('.categoryFilter').join(','),
+    types: getActiveCheckboxValues('.typeFilter').join(','),
+  };
+}
+
+function updateShareableUrl() {
+  const params = new URLSearchParams();
+  const ui = getCurrentUiState();
+  Object.entries(ui).forEach(([key, value]) => {
+    if (value && value !== 'all') params.set(key, value);
+  });
+  const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`;
+  window.history.replaceState({}, '', next);
+}
+
+function applyUrlState() {
+  const params = new URLSearchParams(window.location.search);
+  const search = params.get('q');
+  const date = params.get('date');
+  const time = params.get('time');
+  const sort = params.get('sort');
+  const sunny = params.get('sunny') === '1';
+  const evening = params.get('evening') === '1';
+  const distance = params.get('distance');
+  const categories = new Set((params.get('categories') || '').split(',').filter(Boolean));
+  const types = new Set((params.get('types') || '').split(',').filter(Boolean));
+
+  if (search) els.searchInput.value = search;
+  if (date) els.dateInput.value = date;
+  if (time) els.timeInput.value = time;
+  if (sort && Array.from(els.sortSelect.options).some((option) => option.value === sort)) els.sortSelect.value = sort;
+  els.sunnyNowOnly.checked = sunny;
+  els.eveningOnly.checked = evening;
+
+  if (categories.size) {
+    document.querySelectorAll('.categoryFilter').forEach((el) => {
+      el.checked = categories.has(el.value);
+    });
+  }
+
+  if (types.size) {
+    document.querySelectorAll('.typeFilter').forEach((el) => {
+      el.checked = types.has(el.value);
+    });
+  }
+
+  if (distance && document.querySelector(`input[name="distance"][value="${distance}"]`)) {
+    document.querySelector(`input[name="distance"][value="${distance}"]`).checked = true;
+  }
+}
+
+async function copyShareLink() {
+  updateShareableUrl();
+  const shareUrl = window.location.href;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(shareUrl);
+      updateStatus('Share link copied to clipboard');
+      els.shareBtn.textContent = 'Copied';
+      els.shareBtn.classList.add('success');
+      window.setTimeout(() => {
+        els.shareBtn.textContent = 'Copy share link';
+        els.shareBtn.classList.remove('success');
+        updateStatus(state.sourceLabel + (state.userLocation ? ' · location active' : ''));
+      }, 1800);
+      return;
+    }
+  } catch (error) {
+    console.warn('Clipboard write failed', error);
+  }
+  window.prompt('Copy this terrace view link:', shareUrl);
+}
+
 function enrichTerraceScores(terrace) {
   const selectedDate = getSelectedDateTime();
   const { altitude, azimuthDeg } = getSunData(terrace.lat, terrace.lon, selectedDate);
@@ -310,6 +399,8 @@ function sortTerraces(items) {
 }
 
 function applyFiltersAndRender() {
+  updateShareableUrl();
+  syncQuickModeState();
   const activeCategories = getActiveCheckboxValues('.categoryFilter');
   const activeTypes = getActiveCheckboxValues('.typeFilter');
   const search = els.searchInput.value.trim().toLowerCase();
@@ -337,13 +428,137 @@ function applyFiltersAndRender() {
 }
 
 function formatDistance(meters) {
-  if (meters == null) return 'Location not set';
+  if (meters == null) return 'Central Helsinki default';
   if (meters < 1000) return `${Math.round(meters)} m away`;
   return `${(meters / 1000).toFixed(1)} km away`;
 }
 
+const ALL_TERRACE_TYPES = ['courtyard', 'mixed', 'rooftop', 'street', 'waterfront'];
+
+function setTypeFilters(activeTypes) {
+  const activeSet = new Set(activeTypes);
+  document.querySelectorAll('.typeFilter').forEach((el) => {
+    el.checked = activeSet.has(el.value);
+  });
+}
+
+function setActiveModeButton(activeButton) {
+  [els.modeNowBtn, els.modeAfterWorkBtn, els.modeEveningBtn, els.modeRooftopBtn].forEach((button) => {
+    if (!button) return;
+    button.classList.toggle('active', button === activeButton);
+  });
+}
+
+function arraysEqual(a, b) {
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function getSortedActiveTypes() {
+  return getActiveCheckboxValues('.typeFilter').sort();
+}
+
+function matchesQuickMode(mode) {
+  const activeTypes = getSortedActiveTypes();
+  const hasAllTypes = arraysEqual(activeTypes, [...ALL_TERRACE_TYPES].sort());
+
+  if (mode === 'now') {
+    return hasAllTypes && !els.sunnyNowOnly.checked && !els.eveningOnly.checked && els.sortSelect.value === 'combined';
+  }
+
+  if (mode === 'afterWork') {
+    return hasAllTypes
+      && !els.sunnyNowOnly.checked
+      && !els.eveningOnly.checked
+      && els.sortSelect.value === 'afternoon'
+      && els.timeInput.value === '17:30';
+  }
+
+  if (mode === 'evening') {
+    return hasAllTypes
+      && !els.sunnyNowOnly.checked
+      && els.eveningOnly.checked
+      && els.sortSelect.value === 'evening'
+      && els.timeInput.value === '18:30';
+  }
+
+  if (mode === 'rooftop') {
+    return arraysEqual(activeTypes, ['rooftop'])
+      && !els.sunnyNowOnly.checked
+      && !els.eveningOnly.checked
+      && els.sortSelect.value === 'sunnyNow';
+  }
+
+  return false;
+}
+
+function syncQuickModeState() {
+  if (matchesQuickMode('now')) {
+    setActiveModeButton(els.modeNowBtn);
+    return;
+  }
+
+  if (matchesQuickMode('afterWork')) {
+    setActiveModeButton(els.modeAfterWorkBtn);
+    return;
+  }
+
+  if (matchesQuickMode('evening')) {
+    setActiveModeButton(els.modeEveningBtn);
+    return;
+  }
+
+  if (matchesQuickMode('rooftop')) {
+    setActiveModeButton(els.modeRooftopBtn);
+    return;
+  }
+
+  setActiveModeButton(null);
+}
+
+function activateQuickMode(mode) {
+  els.sunnyNowOnly.checked = false;
+  els.eveningOnly.checked = false;
+
+  if (mode === 'now') {
+    setTypeFilters(ALL_TERRACE_TYPES);
+    els.sortSelect.value = 'combined';
+  }
+
+  if (mode === 'afterWork') {
+    setTypeFilters(ALL_TERRACE_TYPES);
+    els.timeInput.value = '17:30';
+    els.sortSelect.value = 'afternoon';
+  }
+
+  if (mode === 'evening') {
+    setTypeFilters(ALL_TERRACE_TYPES);
+    els.timeInput.value = '18:30';
+    els.sortSelect.value = 'evening';
+    els.eveningOnly.checked = true;
+  }
+
+  if (mode === 'rooftop') {
+    setTypeFilters(['rooftop']);
+    els.sortSelect.value = 'sunnyNow';
+  }
+
+  applyFiltersAndRender();
+}
+
 function pct(value) {
   return `${Math.round(value * 100)}%`;
+}
+
+function getRankLabel() {
+  const labels = {
+    combined: 'overall',
+    nearest: 'nearest',
+    sunnyNow: 'sun now',
+    afternoon: 'after work',
+    evening: 'evening',
+    overall: 'overall',
+  };
+  return labels[els.sortSelect.value] || 'overall';
 }
 
 function googleMapsLink(item) {
@@ -357,18 +572,22 @@ function renderList() {
     return;
   }
 
-  els.resultsList.innerHTML = state.terraces.map((item) => `
+  const rankLabel = getRankLabel();
+  els.resultsList.innerHTML = state.terraces.map((item, index) => `
     <article class="result-card">
-      <h3>${escapeHtml(item.name)}</h3>
+      <div class="result-card-header">
+        <h3>${escapeHtml(item.name)}</h3>
+        <span class="rank-badge">#${index + 1} ${rankLabel}</span>
+      </div>
       <div class="result-meta">
         <span class="badge">${escapeHtml(item.district)}</span>
         <span class="badge">${escapeHtml(item.category)}</span>
         <span class="badge">${escapeHtml(item.terraceType)}</span>
-        <span class="badge ${item.sunnyNow ? 'sunny' : 'shade'}">Sun now ${pct(item.nowSunScore)}</span>
-        <span class="badge ${item.eveningSun ? 'sunny' : ''}">Evening ${pct(item.eveningScore)}</span>
+        <span class="badge ${item.sunnyNow ? 'sunny' : 'shade'}">☀️ Now ${pct(item.nowSunScore)}</span>
+        <span class="badge ${item.eveningSun ? 'sunny' : ''}">🌇 Evening ${pct(item.eveningScore)}</span>
       </div>
       <p>${escapeHtml(item.description || item.address)}</p>
-      <p>${escapeHtml(item.address)} · ${formatDistance(item.distance)} · confidence ${pct(item.confidence)}</p>
+      <p>${escapeHtml(item.address)} · ${formatDistance(item.distance)} · quality ${pct(item.confidence)}</p>
       <div class="result-actions">
         <a class="link-button" href="${googleMapsLink(item)}" target="_blank" rel="noreferrer">Open in Maps</a>
         ${item.website ? `<a class="link-button" href="${item.website}" target="_blank" rel="noreferrer">Website</a>` : ''}
@@ -404,8 +623,8 @@ function renderTopPicks() {
   const bestNow = state.terraces[0];
   const bestEvening = [...state.terraces].sort((a, b) => b.eveningScore - a.eveningScore)[0];
   const best1km = state.terraces.filter((item) => item.distance == null || item.distance <= 1000)[0];
-  els.topNow.textContent = bestNow ? `${bestNow.name} · ${pct(bestNow.nowSunScore)}` : 'No match';
-  els.topEvening.textContent = bestEvening ? `${bestEvening.name} · ${pct(bestEvening.eveningScore)}` : 'No match';
+  els.topNow.textContent = bestNow ? `${bestNow.name} · ${pct(bestNow.nowSunScore)} sun` : 'No match';
+  els.topEvening.textContent = bestEvening ? `${bestEvening.name} · ${pct(bestEvening.eveningScore)} evening` : 'No match';
   els.top1km.textContent = best1km ? `${best1km.name} · ${formatDistance(best1km.distance)}` : 'No nearby match';
 }
 
@@ -448,6 +667,11 @@ function escapeHtml(value) {
 function bindEvents() {
   els.locateBtn.addEventListener('click', locateUser);
   els.refreshBtn.addEventListener('click', loadTerraces);
+  els.shareBtn.addEventListener('click', copyShareLink);
+  els.modeNowBtn?.addEventListener('click', () => activateQuickMode('now'));
+  els.modeAfterWorkBtn?.addEventListener('click', () => activateQuickMode('afterWork'));
+  els.modeEveningBtn?.addEventListener('click', () => activateQuickMode('evening'));
+  els.modeRooftopBtn?.addEventListener('click', () => activateQuickMode('rooftop'));
   [els.searchInput, els.dateInput, els.timeInput, els.sortSelect, els.sunnyNowOnly, els.eveningOnly].forEach((el) => {
     el.addEventListener('input', applyFiltersAndRender);
     el.addEventListener('change', applyFiltersAndRender);
@@ -460,6 +684,7 @@ function bindEvents() {
 async function main() {
   initMap();
   setDefaultInputs();
+  applyUrlState();
   bindEvents();
   await loadTerraces();
 }
